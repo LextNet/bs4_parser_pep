@@ -93,10 +93,10 @@ def download(session):
         return
     soup = BeautifulSoup(response.text, features='lxml')
 
-    main_tag = find_tag(soup, ('div', {'role': 'main'}))
-    table_tag = find_tag(main_tag, ('table', {'class': 'docutils'}))
-    pdf_a4_tag = find_tag(table_tag, (
-        'a', {'href': re.compile(r'.+docs-text\.zip$')}))
+    main_tag = find_tag(soup, 'div', {'role': 'main'})
+    table_tag = find_tag(main_tag, 'table', attrs={'class': 'docutils'})
+    pdf_a4_tag = find_tag(table_tag, 
+        'a', {'href': re.compile(r'.+docs-text\.zip$')})
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
