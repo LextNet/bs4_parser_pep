@@ -5,16 +5,17 @@ import logging
 from prettytable import PrettyTable
 
 from constants import (
-    BASE_DIR, DATETIME_FORMAT, MAX_STATUS_LENGTH, MAX_COUNT_LENGTH, TOTAL_WIDTH
+    BASE_DIR, DATETIME_FORMAT, MAX_STATUS_LENGTH, MAX_COUNT_LENGTH,
+    TOTAL_WIDTH, OUTPUT_PRETTY_TABLE, OUTPUT_FILE, RESULTS_DIR
 )
 
 
 def control_output(results, cli_args):
     output = cli_args.output
-    if output == 'pretty':
+    if output == OUTPUT_PRETTY_TABLE:
         # Вывод данных в PrettyTable.
         pretty_output(results)
-    elif output == 'file':
+    elif output == OUTPUT_FILE:
         # Вывод данных в файл csv.
         file_output(results, cli_args)
     else:
@@ -61,7 +62,7 @@ def write_default_format(file_path, results):
 
 
 def file_output(results, cli_args):
-    results_dir = BASE_DIR / 'results'
+    results_dir = BASE_DIR / RESULTS_DIR
     results_dir.mkdir(exist_ok=True)
     # Получаем режим работы парсера из аргументов командной строки.
     parser_mode = cli_args.mode

@@ -2,7 +2,7 @@ import argparse
 import logging
 from logging.handlers import RotatingFileHandler
 
-from constants import BASE_DIR
+from constants import BASE_DIR, OUTPUT_PRETTY_TABLE, OUTPUT_FILE, LOGS_DIR
 
 # Описание формата логов:
 # Время записи – Уровень сообщения – Cообщение.
@@ -28,14 +28,14 @@ def configure_argument_parser(available_modes):
     parser.add_argument(
         '-o',
         '--output',
-        choices=('pretty', 'file'),
+        choices=(OUTPUT_PRETTY_TABLE, OUTPUT_FILE),
         help='Дополнительные способы вывода данных'
     )
     return parser
 
 
 def configure_logging():
-    log_dir = BASE_DIR / 'logs'
+    log_dir = BASE_DIR / LOGS_DIR
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / 'parser.log'
     # Инициализация хендлера с ротацией логов.

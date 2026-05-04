@@ -3,24 +3,21 @@ from urllib.parse import urljoin
 import logging
 
 import requests_cache
-from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
 from constants import BASE_DIR, MAIN_DOC_URL, PEP_DOC_URL, EXPECTED_STATUS
+from exceptions import ParserFindTagException, RequestError
 from outputs import control_output
-from utils import get_response, find_tag, is_relative_url
+from utils import find_tag, is_relative_url, get_soup
 
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
-    response = get_response(session, whats_new_url)
-    if response is None:
+    soup = get_soup(session, whats_new_url)
+    if soup is None:
         return
-    soup = BeautifulSoup(response.text, features='lxml')
-
-    main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
-    div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
+    div_with_ul = find_tag(soup, 'div', attrs={'class': 'toctree-wrapper'})
     sections_by_python = div_with_ul.find_all('li',
                                               attrs={'class': 'toctree-l1'})
     results = []
@@ -29,10 +26,9 @@ def whats_new(session):
         version_a_tag = find_tag(section, 'a')
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
-        response = get_response(session, version_link)
-        if response is None:
-            continue
-        soup = BeautifulSoup(response.text, features='lxml')
+        soup = get_soup(session, version_link)
+        if soup is None:
+            return
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
         dl_text = dl.text.replace('\n', ' ')
@@ -43,11 +39,10 @@ def whats_new(session):
 
 
 def latest_versions(session):
-    response = get_response(session, MAIN_DOC_URL)
-    if response is None:
+    soup = get_soup(session, MAIN_DOC_URL)
+    if soup is None:
         logging.error('Не удалось загрузить страницу: %s', MAIN_DOC_URL)
         return
-    soup = BeautifulSoup(response.text, features='lxml')
 
     sidebar = find_tag(soup, 'div', {'class': 'sphinxsidebarwrapper'})
     ul_tags = sidebar.find_all('ul')
@@ -59,7 +54,7 @@ def latest_versions(session):
     # Если нужный список не нашёлся,
     # вызывается исключение и выполнение программы прерывается.
     else:
-        raise Exception('Ничего не нашлось')
+        raise ParserFindTagException('Ничего не нашлось')
 
     results = []
     results = [('Ссылка на документацию', 'Версия', 'Статус')]
@@ -87,12 +82,10 @@ def latest_versions(session):
 
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
-    response = get_response(session, downloads_url)
-    if response is None:
+    soup = get_soup(session, downloads_url)
+    if soup is None:
         logging.error('Не удалось загрузить страницу: %s', downloads_url)
         return
-    soup = BeautifulSoup(response.text, features='lxml')
-
     main_tag = find_tag(soup, 'div', {'role': 'main'})
     table_tag = find_tag(main_tag, 'table', attrs={'class': 'docutils'})
     pdf_a4_tag = find_tag(table_tag, 'a',
@@ -113,16 +106,14 @@ def download(session):
 
 
 def pep(session):
-    response = get_response(session, PEP_DOC_URL)
-    if response is None:
+    soup = get_soup(session, PEP_DOC_URL)
+    if soup is None:
         return
-    soup = BeautifulSoup(response.text, features='lxml')
-
     tags_table = soup.find_all('table')
     status_counts = {}
     count_pep = 0
     results = []
-    results = [('Статус', 'Количество')]
+    results = [('Status', 'Count')]
     for table_tag in tags_table:
         thead_tag = find_tag(table_tag, 'thead')
         tag_name_status = thead_tag.find(string="PEP")
@@ -140,10 +131,9 @@ def pep(session):
             link = link_tags['href']
             if is_relative_url(link):
                 link = urljoin(PEP_DOC_URL, link)
-            response = get_response(session, link)
-            if response is None:
+            soup = get_soup(session, link)
+            if soup is None:
                 continue
-            soup = BeautifulSoup(response.text, features='lxml')
             pep_section = find_tag(soup, 'section',
                                    attrs={'id': 'pep-content'})
             dl_tag = find_tag(pep_section, 'dl')
@@ -186,30 +176,37 @@ def main():
     configure_logging()
     # Отмечаем в логах момент запуска программы.
     logging.info('Парсер запущен!')
-    # Конфигурация парсера аргументов командной строки —
-    # передача в функцию допустимых вариантов выбора.
-    arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
-    # Считывание аргументов из командной строки.
-    args = arg_parser.parse_args()
-    # Логируем переданные аргументы командной строки.
-    logging.info(f'Аргументы командной строки: {args}')
-    # Создание кеширующей сессии.
-    session = requests_cache.CachedSession()
-    # Если был передан ключ '--clear-cache', то args.clear_cache == True.
-    if args.clear_cache:
-        # Очистка кеша.
-        session.cache.clear()
-    # Получение из аргументов командной строки нужного режима работы.
-    parser_mode = args.mode
-    # Поиск и вызов нужной функции по ключу словаря.
-    results = MODE_TO_FUNCTION[parser_mode](session)
 
-    # Если из функции вернулись какие-то результаты,
-    if results is not None:
-        # передаём их в функцию вывода вместе с аргументами командной строки.
-        control_output(results, args)
-    # Логируем завершение работы парсера.
-    logging.info('Парсер завершил работу.')
+    try:
+        # Конфигурация парсера аргументов командной строки —
+        # передача в функцию допустимых вариантов выбора.
+        arg_parser = configure_argument_parser(MODE_TO_FUNCTION.keys())
+        # Считывание аргументов из командной строки.
+        args = arg_parser.parse_args()
+        # Логируем переданные аргументы командной строки.
+        logging.info(f'Аргументы командной строки: {args}')
+        # Создание кеширующей сессии.
+        session = requests_cache.CachedSession()
+        # Если был передан ключ '--clear-cache', то args.clear_cache == True.
+        if args.clear_cache:
+            # Очистка кеша.
+            session.cache.clear()
+        # Получение из аргументов командной строки нужного режима работы.
+        parser_mode = args.mode
+        # Поиск и вызов нужной функции по ключу словаря.
+        results = MODE_TO_FUNCTION[parser_mode](session)
+
+        # Если из функции вернулись какие-то результаты,
+        if results is not None:
+            # передаём их в функцию вывода вместе с аргументами командной строки.
+            control_output(results, args)
+    except RequestError as e:
+        logging.exception(str(e), stack_info=True)
+    except ParserFindTagException as e:
+        logging.error(str(e), stack_info=True)
+    finally:
+        # Логируем завершение работы парсера.
+        logging.info('Парсер завершил работу.')
 
 
 if __name__ == '__main__':
