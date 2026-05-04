@@ -11,7 +11,7 @@ def get_response(session, url, encoding='utf-8'):
         response = session.get(url)
         response.encoding = encoding
         return response
-    except RequestException as e:
+    except RequestException:
         error_msg = f'Возникла ошибка при загрузке страницы {url}'
         raise RequestError(error_msg)
 

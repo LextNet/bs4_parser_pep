@@ -198,7 +198,7 @@ def main():
 
         # Если из функции вернулись какие-то результаты,
         if results is not None:
-            # передаём их в функцию вывода вместе с аргументами командной строки.
+            # передаём их в вывод вместе с аргументами командной строки.
             control_output(results, args)
     except RequestError as e:
         logging.exception(str(e), stack_info=True)
