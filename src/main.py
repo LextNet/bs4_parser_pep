@@ -6,7 +6,8 @@ import requests_cache
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, MAIN_DOC_URL, PEP_DOC_URL, EXPECTED_STATUS
+from constants import (BASE_DIR, MAIN_DOC_URL, PEP_DOC_URL, EXPECTED_STATUS,
+                       DOWNLOADS_DIR)
 from exceptions import ParserFindTagException, RequestError
 from outputs import control_output
 from utils import find_tag, is_relative_url, get_soup
@@ -86,14 +87,12 @@ def download(session):
     if soup is None:
         logging.error('Не удалось загрузить страницу: %s', downloads_url)
         return
-    main_tag = find_tag(soup, 'div', {'role': 'main'})
-    table_tag = find_tag(main_tag, 'table', attrs={'class': 'docutils'})
-    pdf_a4_tag = find_tag(table_tag, 'a',
+    pdf_a4_tag = find_tag(soup, 'a',
                           {'href': re.compile(r'.+docs-text\.zip$')})
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
-    downloads_dir = BASE_DIR / 'downloads'
+    downloads_dir = BASE_DIR / DOWNLOADS_DIR
     downloads_dir.mkdir(exist_ok=True)
     archive_path = downloads_dir / filename
     # Загрузка архива по ссылке.
